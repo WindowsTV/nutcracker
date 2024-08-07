@@ -51,7 +51,7 @@ def get_all_scripts(
 ) -> Iterator[bytes]:
     for elem in root:
         if elem.tag in {'OBNA', 'TEXT'}:
-            msg, rest = elem.data.split(b'\x00', maxsplit=1)
+            msg, rest = bytes(elem.data).split(b'\x00', maxsplit=1)
             assert rest == b''
             if msg != b'':
                 yield msg
@@ -100,7 +100,7 @@ def update_element_strings(
             elem.update_raw(next(strings) + b'\x00')
         elif elem.tag in {'LECF', 'LFLF', 'RMDA', 'ROOM', 'OBCD', 'TLKE', *script_map}:
             if elem.tag in script_map:
-                serial, script_data = script_map[elem.tag](elem.data)
+                serial, script_data = script_map[elem.tag](bytes(elem.data))
                 bc = descumm(script_data, opcodes)
                 updated = update_strings(bc, strings)
                 if elem.tag == 'VERB':
