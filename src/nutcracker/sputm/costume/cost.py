@@ -163,7 +163,7 @@ if __name__ == '__main__':
         os.makedirs(f'COST_out/{basename}', exist_ok=True)
 
         for t in root:
-            for lflf in get_rooms(t):
+            for lflf in get_rooms(t.children()):
                 print(lflf, lflf.attribs['path'])
                 _, palette, _, _ = read_room_settings(lflf)
 

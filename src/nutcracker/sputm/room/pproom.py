@@ -50,8 +50,9 @@ def read_room(header, rmim):
         # 'Game Version < 7'
         for imxx in sputm.findall('IM{:02x}', rmim):
             assert imxx.tag == 'IM00', imxx.tag
+            children = list(imxx.children())
             bgim = read_room_background(
-                imxx.children[0],
+                children[0],
                 header.width,
                 header.height,
                 header.zbuffers,
@@ -111,8 +112,9 @@ def read_objects(header, room, version):
             assert obj_id == obim.attribs['gid'], (obj_id, obim.attribs['gid'])
 
             for imxx in sputm.findall('IM{:02x}', obim):
+                children = list(imxx.children())
                 bgim = read_room_background(
-                    imxx.children[0],
+                    children[0],
                     obj_width,
                     obj_height,
                     0,

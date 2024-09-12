@@ -60,8 +60,8 @@ def get_all_scripts(
                 # print('==================', elem.attribs['path'])
                 _, script_data = script_map[elem.tag](elem.data)
                 bytecode = descumm(script_data, opcodes)
-                for msg in get_strings(bytecode):
-                    yield msg.msg
+                for cmsg in get_strings(bytecode):
+                    yield cmsg.msg
             else:
                 yield from get_all_scripts(elem.children(), opcodes, script_map)
 

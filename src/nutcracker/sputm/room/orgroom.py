@@ -52,11 +52,12 @@ def read_objects(room, version):
             for imxx in sputm.findall('IM{:02x}', obim):
                 path = imxx.attribs['path']
                 name = f'{obj_id:04d}_{imxx.tag}'
+                children = list(imxx.children())
 
                 yield (
                     path,
                     name,
-                    imxx.children[0],
+                    children[0],
                     ObjectHeader(
                         height=obj_height,
                         width=obj_width,
