@@ -14,7 +14,14 @@ Tools for editing resources in SCUMM games.
 [*] SCUMM debugger from https://quickandeasysoftware.net/monkey-island-2-talkie-prototype and HE demos for DOS
 
 ## Installation
-Latest development binaries can be downloaded here: https://nightly.link/BLooperZ/nutcracker/workflows/main/develop/nutcracker.zip
+Latest development binaries can be downloaded here
+
+Linux: https://nightly.link/BLooperZ/nutcracker/workflows/main/develop/nutcracker-Linux.zip
+
+macOS: https://nightly.link/BLooperZ/nutcracker/workflows/main/develop/nutcracker-macOS.zip
+
+Windows: https://nightly.link/BLooperZ/nutcracker/workflows/main/develop/nutcracker-Windows.zip
+
 
 Thanks to https://nightly.link/
 

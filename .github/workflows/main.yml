@@ -24,8 +24,8 @@ jobs:
         shell: bash
 
     steps:
-    - uses: actions/checkout@v2
-    - uses: actions/setup-python@v2
+    - uses: actions/checkout@v4
+    - uses: actions/setup-python@v5
       with:
         python-version: 3.12.4
     - name: Install Poetry
@@ -39,16 +39,10 @@ jobs:
         poetry run pyinstaller --onefile -n nutcracker src/nutcracker/runner.py
     # Optionally verify that it works (provided that it does not need user interaction)
     - run: ./dist/nutcracker --help
-    - run: |
-          if [ "$RUNNER_OS" == "Linux" ]; then
-            mv ./dist/nutcracker ./dist/nutcracker-linux
-          elif [ "$RUNNER_OS" == "macOS" ]; then
-            mv ./dist/nutcracker ./dist/nutcracker-macos
-          else
-            cp README.md ./dist/README.md
-            poetry run pip-licenses --from=all --format=plain-vertical --with-license-file --no-license-path --with-urls --with-description --output-file ./dist/LICENSE
-          fi
-    - uses: actions/upload-artifact@v2
+    - run: cp README.md ./dist/README.md
+    - run: poetry run pip-licenses --from=all --format=plain-vertical --with-license-file --no-license-path --with-urls --with-description --output-file ./dist/LICENSE
+
+    - uses: actions/upload-artifact@v4
       with:
-        name: nutcracker
+        name: nutcracker-${{ runner.os }}
         path: dist/*
