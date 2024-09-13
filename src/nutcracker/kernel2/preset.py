@@ -4,6 +4,7 @@ from typing import Any, Self
 from nutcracker.kernel2 import tree
 from nutcracker.kernel2.chunk import (
     IFFChunkHeader,
+    assert_tag,
     mktag,
     read_chunks,
     untag,
@@ -37,6 +38,7 @@ class Preset(IndexerSettings, _DefaultOverride):
     findpath = staticmethod(tree.findpath)
     render = staticmethod(tree.render)
     renders = staticmethod(tree.renders)
+    assert_tag = staticmethod(assert_tag)
 
 
 shell = Preset(

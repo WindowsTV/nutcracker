@@ -106,6 +106,15 @@ class ChunkSettings:
     skip_byte: int | None = 0x80
 
 
+class ChunkLike(Protocol):
+    @property
+    def tag(self) -> str:
+        """Return the chunk tag."""
+    @property
+    def data(self) -> ArrayBuffer:
+        """Return the chunk data buffer."""
+
+
 @dataclass(frozen=True, slots=True)
 class Chunk:
     header: ChunkHeader
@@ -232,3 +241,15 @@ def write_chunks(cfg: ChunkSettings, chunks: Iterable[Chunk]) -> bytes:
         content = bytes(chunk)
         stream += content + bytes(calc_align(len(content), cfg.alignment))
     return bytes(stream)
+
+
+class UnexpectedTagError(ValueError):
+    def __init__(self, expected: str, got: str) -> None:
+        super().__init__(f'expected tag to be {expected} but got {got}')
+
+
+def assert_tag(target: str, chunk: 'ChunkLike') -> 'ArrayBuffer':
+    """Return chunk data if chunk has target 4CC tag."""
+    if chunk.tag != target:
+        raise UnexpectedTagError(target, chunk.tag)
+    return chunk.data
