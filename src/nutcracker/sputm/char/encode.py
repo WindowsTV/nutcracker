@@ -1,25 +1,26 @@
 #!/usr/bin/env python3
 import io
 import struct
+from collections.abc import Callable, Iterable, Iterator
 from functools import partial
+from typing import TypeVar
 
 import numpy as np
 
 from nutcracker.codex.bpp_codec import encode_bpp_char
 from nutcracker.codex.rle import encode_lined_rle
-from nutcracker.graphics import grid
+from nutcracker.graphics import grid, image
 from nutcracker.kernel2.element import Element
+from nutcracker.sputm.preset import sputm
 from nutcracker.utils.funcutils import flatten
 
-from ..preset import sputm
 
-
-def calc_bpp(x: int):
+def calc_bpp(x: int) -> int:
     return 1 << max((x - 1).bit_length() - 1, 0).bit_length()
 
 
 # TODO: replace with itertools.takewhile
-def filter_empty_frames(frames):
+def filter_empty_frames(frames: Iterable[image.TImage]) -> Iterator[image.TImage]:
     for im in frames:
         frame = list(np.asarray(im))
         if set(flatten(frame)) == {0}:
@@ -27,16 +28,25 @@ def filter_empty_frames(frames):
         yield im
 
 
-def bind(func, frames):
+T = TypeVar('T')
+
+
+def bind(
+    func: Callable[[image.TImage], T],
+    frames: Iterable[image.TImage],
+) -> Iterator[tuple[image.TImage, T]]:
     for frame in frames:
         yield frame, func(frame) if frame else None
 
 
-def get_frame_bpp(frame):
+def get_frame_bpp(frame: image.TImage) -> int:
     return calc_bpp(len(set(flatten(frame[1]))))
 
 
-def encode_frames(frames, encoder):
+def encode_frames(
+    frames: Iterable[image.TImage],
+    encoder: Callable[[image.TImage], bytes],
+) -> Iterator[bytes]:
     for idx, frame in enumerate(frames):
         if not frame:
             yield None
@@ -73,7 +83,7 @@ def encode_char(ref: Element, filename: str) -> bytes:
     nchars = len(frames)
     print(nchars)
     frames = (grid.resize_frame(frame) for frame in frames)
-    frames, bpps = zip(*bind(get_frame_bpp, frames))
+    frames, bpps = zip(*bind(get_frame_bpp, frames), strict=True)
 
     v_bpp = max(val for val in bpps if val)
     print(f'{v_bpp}v_bpp, {bpp}bpp')

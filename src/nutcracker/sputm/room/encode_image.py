@@ -66,7 +66,10 @@ def encode_block_v8(
     if blocktype == 'BOMP':
         bomp = encode1(npim)
         assert np.array_equal(npim, decode1(*npim.shape[::-1], bomp))
-        # v8
+        if version < 8:
+            header = ref.data[:10]
+            print(header, struct.pack('<5H', 0, *npim.shape[::-1], 0, 0))
+            return bytes(header) + bomp
         return struct.pack('<2I', *npim.shape[::-1]) + bomp
 
     if blocktype == 'BMAP':

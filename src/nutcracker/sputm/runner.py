@@ -175,7 +175,7 @@ def inject_fonts(
         if os.path.exists(patch_file):
             base_out = os.path.join(dirname, path)
             os.makedirs(os.path.dirname(base_out), exist_ok=True)
-            write_file(base_out, sputm.mktag('CHAR', encode_char(elem, patch_file)))
+            write_file(base_out, bytes(sputm.mktag('CHAR', memoryview(encode_char(elem, patch_file)))))
 
 
 if __name__ == '__main__':

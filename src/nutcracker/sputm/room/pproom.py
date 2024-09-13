@@ -8,8 +8,8 @@ from PIL import Image
 from nutcracker.graphics import image
 from nutcracker.graphics.frame import resize_pil_image
 from nutcracker.graphics.image import convert_to_pil_image
+from nutcracker.sputm.preset import sputm
 
-from ..preset import sputm
 from .proom import (
     read_imhd,
     read_imhd_v7,

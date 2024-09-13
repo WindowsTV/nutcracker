@@ -339,7 +339,7 @@ def parse_strip(height, width, data, transparency=None):
                 print('ENCODED', encoded)
                 exit(1)
             elif len(orig) > len(encoded):
-                assert encoded + b'\x00' == orig
+                assert encoded + b'\x00' == orig, (encoded, orig)
             s.seek(pos)
 
         # Verify nothing left in stream

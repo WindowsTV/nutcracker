@@ -5,12 +5,21 @@ import os
 from collections.abc import Iterable, Iterator, Sequence
 from dataclasses import dataclass
 
-from nutcracker.kernel2.element import Element
+import numpy as np
+from PIL import Image
 
-from ..preset import sputm
+from nutcracker.kernel2.element import Element
+from nutcracker.sputm.preset import sputm
+
 from .encode_image import encode_block_v8
 from .pproom import get_rooms, read_room_settings
-from .proom import read_imhd, read_imhd_v7, read_imhd_v8
+from .proom import (
+    read_imhd,
+    read_imhd_v7,
+    read_imhd_v8,
+    read_room_background,
+    read_room_background_v8,
+)
 
 
 def read_room(header, rmim):
@@ -18,7 +27,7 @@ def read_room(header, rmim):
         # 'Game Version < 7'
         for imxx in sputm.findall('IM{:02x}', rmim):
             assert imxx.tag == 'IM00', imxx.tag
-            yield from imxx.children
+            yield from imxx.children()
     else:
         # TODO: check for multiple IMAG in room bg (different image state)
         assert rmim.tag == 'IMAG'
@@ -162,6 +171,7 @@ def make_room_images_patch(
     basedir: str,
     rnam: str,
     version: int,
+    verify: bool = True,
 ) -> Iterator[tuple[str, bytes]]:
     for t in root:
         for lflf in get_rooms(t.children()):
@@ -170,6 +180,10 @@ def make_room_images_patch(
             room_id = lflf.attribs.get('gid')
 
             for imxx in read_room(header, rmim):
+                if imxx.tag.startswith('ZP'):
+                    # TODO: handle ZPXX
+                    continue
+
                 im_path = (
                     f'{room_id:04d}_{rnam.get(room_id)}'
                     if room_id in rnam
@@ -209,6 +223,21 @@ def make_room_images_patch(
                             imxx.attribs['path'],
                             bytes(sputm.mktag(imxx.tag, encoded)),
                         )
+
+                        if verify:
+                            el = next(sputm(schema=s).map_chunks(bytes(sputm.mktag(imxx.tag, encoded))))
+
+                            im = Image.open(im_path)
+                            npim = np.asarray(im, dtype=np.uint8)
+
+                            read_image = read_room_background if version < 8 else read_room_background_v8
+
+                            assert  np.array_equal(read_image(
+                                el,
+                                header.width,
+                                header.height,
+                                header.zbuffers,
+                            ), npim)
                         # os.makedirs(os.path.dirname(res_path), exist_ok=True)
                         # write_file(res_path, sputm.mktag(imxx.tag, encoded))
                     print((im_path, imxx.attribs['path'], imxx.tag))
@@ -275,4 +304,18 @@ def make_room_images_patch(
                             )
                             # os.makedirs(os.path.dirname(res_path), exist_ok=True)
                             # write_file(res_path, sputm.mktag(imxx.tag, encoded))
+                            if verify:
+                                el = next(sputm(schema=s).map_chunks(bytes(sputm.mktag(imag.tag, encoded))))
+
+                                im = Image.open(im_path)
+                                npim = np.asarray(im, dtype=np.uint8)
+
+                                read_image = read_room_background if version < 8 else read_room_background_v8
+
+                                assert  np.array_equal(read_image(
+                                    el,
+                                    *im.size,
+                                    0,
+                                ), npim)
+
                         print((im_path, imag.attribs['path'], imag.tag))

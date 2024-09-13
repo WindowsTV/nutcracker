@@ -2,10 +2,10 @@
 import io
 import os
 import struct
-from collections.abc import Iterable, Iterator, Sequence
+from collections.abc import Callable, Iterable, Iterator, Sequence
 from functools import partial
 from itertools import chain
-from typing import NamedTuple
+from typing import IO, NamedTuple
 
 import numpy as np
 from PIL import Image
@@ -14,8 +14,7 @@ from nutcracker.codex.bpp_codec import decode_bpp_char
 from nutcracker.codex.rle import decode_lined_rle
 from nutcracker.graphics import grid, image
 from nutcracker.kernel2.element import Element
-
-from ..preset import sputm
+from nutcracker.sputm.preset import sputm
 
 CHAR_HEADER = struct.Struct('<2B2b')
 
@@ -31,7 +30,7 @@ class DataFrame(NamedTuple):
         return np.asarray(self.data).tolist()
 
 
-def char_from_bytes(data: bytes, decoder: callable) -> DataFrame:
+def char_from_bytes(data: bytes, decoder: Callable[[bytes, int, int], bytes]) -> DataFrame:
     width, cheight, xoff, yoff = CHAR_HEADER.unpack(data[: CHAR_HEADER.size])
     data = decoder(data[CHAR_HEADER.size :], width, cheight)
     return DataFrame(
@@ -43,7 +42,7 @@ def char_from_bytes(data: bytes, decoder: callable) -> DataFrame:
     )
 
 
-def read_chars(stream, index, bpp):
+def read_chars(stream: IO[bytes], index: int, bpp: int) -> Iterator[tuple[int, DataFrame]]:
     decoder = (
         partial(decode_bpp_char, bpp=bpp) if bpp in (1, 2, 4) else decode_lined_rle
     )
@@ -65,7 +64,7 @@ def read_chars(stream, index, bpp):
     print(unique_vals)
 
 
-def handle_char(data):
+def handle_char(data: bytes) -> tuple[int, Sequence[tuple[int, DataFrame]]]:
     header_size = 21
 
     header = data[:header_size]
@@ -129,11 +128,17 @@ def decode_font(char: Element) -> image.TImage:
 
     nchars, chars = handle_char(data)
     chars = [(idx, (char.xoff, char.yoff, char.data)) for idx, char in chars]
-    bim = grid.create_char_grid(nchars, chars)
+    widths, heights = zip(*(char[1][2].size for char in chars))
+    bim = grid.create_char_grid(
+        nchars,
+        chars,
+        w=max(max(widths) + 2 * grid.BASE_XOFF, grid.TILE_W),
+        h=max(max(heights) + 2 * grid.BASE_YOFF, grid.TILE_H),
+    )
     bim.putpalette(CHAR_PALETTE)
     return bim
 
 
-def decode_all_fonts(root: Iterable[Element]):
+def decode_all_fonts(root: Iterable[Element]) -> Iterator[tuple[str, image.TImage]]:
     for char in get_chars(root):
         yield os.path.basename(char.attribs['path']), decode_font(char)

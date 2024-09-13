@@ -35,11 +35,12 @@ def get_bg_color(
 
 def read_image_grid(
     filename: str,
-    w: int = TILE_W,
-    h: int = TILE_H,
     grid_size: int = GRID_SIZE,
 ) -> Iterator[TImage]:
     bim = Image.open(filename)
+
+    w = bim.width // grid_size
+    h = bim.height // grid_size
 
     for row in range(grid_size):
         for col in range(grid_size):
