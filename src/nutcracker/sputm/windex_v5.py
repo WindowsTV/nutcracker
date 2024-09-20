@@ -1423,7 +1423,9 @@ def get_elem_info(elem):
     pref, script_data = script_map[elem.tag](elem.data)
     entries = {}
     if elem.tag == 'VERB':
-        obj_names[gid] = msg_to_print(sputm.find('OBNA', obcd).data.split(b'\0')[0])
+        obj_names[gid] = msg_to_print(
+            bytes(sputm.find('OBNA', obcd).data).split(b'\0', maxsplit=1)[0]
+        )
         pref = list(parse_verb_meta(pref))
         entries = {off: idx[0] for idx, off in pref}
     else:
