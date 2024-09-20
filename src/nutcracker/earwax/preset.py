@@ -23,4 +23,5 @@ earwax = preset.shell(
     alignment=1,
     inclheader=True,
     errors='ignore',
+    skip_byte=None,
 )

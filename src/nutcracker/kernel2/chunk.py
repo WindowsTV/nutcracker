@@ -161,11 +161,19 @@ def read_chunk_header(
     return offset + cfg.header_dtype.itemsize(), chunk_header
 
 
+class UnexpectedBufferSizeError(EOFError):
+    def __init__(self, expected: int, given: int, buffer: ArrayBuffer) -> None:
+        super().__init__(f'chunk data size mismatch: {expected} != {given}')
+        self.expected = expected
+        self.given = given
+        self.buffer = buffer
+
+
 def nslice(buffer: ArrayBuffer, start: int, end: int) -> ArrayBuffer:
     res = buffer[start:end]
     assert getattr(res, 'nbytes', len(res)) == len(res)
     if len(res) != end - start:
-        raise ValueError(f'chunk data size mismatch: {len(res)} != {end - start}')  # noqa: TRY003
+        raise UnexpectedBufferSizeError(len(res), end - start, buffer)
     return res
 
 

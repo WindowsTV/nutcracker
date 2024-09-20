@@ -6,8 +6,12 @@ from pprint import pprint
 from typing import Any
 
 from nutcracker.chiper import xor
-from nutcracker.kernel.buffer import Splicer, UnexpectedBufferSize
-from nutcracker.kernel2.chunk import ArrayBuffer, Chunk
+from nutcracker.kernel2.chunk import (
+    ArrayBuffer,
+    Chunk,
+    ChunkHeaderData,
+    UnexpectedBufferSizeError,
+)
 from nutcracker.kernel2.element import Element
 from nutcracker.sputm.index import compare_pid_off, read_uint8le
 from nutcracker.sputm.tree import save_tree
@@ -265,14 +269,19 @@ def open_game_resource(filename: str, chiper_key=0x00):
                     c += len(bytes(a.chunk))
                     t.add_child(a)
                     # print(a)
-            except UnexpectedBufferSize as exc:
+            except UnexpectedBufferSizeError as exc:
                 print(f'warning: {exc}')
             rawd = t.data[c:]
             if rawd != b'':
                 t.add_child(
                     create_element(
                         c,
-                        Chunk('__', rawd, Splicer(0, len(rawd))),
+                        Chunk(
+                            earwax.header_dtype.create(
+                                ChunkHeaderData(tag='__', size=len(rawd))
+                            ),
+                            rawd,
+                        ),
                         path=os.path.join(t.attribs['path'], 'REST'),
                     ),
                 )
