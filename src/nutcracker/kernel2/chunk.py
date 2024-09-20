@@ -103,7 +103,7 @@ class ChunkSettings:
     header_dtype: type[ChunkHeader]
     alignment: int
     inclheader: bool
-    skip_byte: int | None = 0x80
+    skip_byte: int | None = None
 
 
 class ChunkLike(Protocol):

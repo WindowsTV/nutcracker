@@ -45,5 +45,5 @@ shell = Preset(
     header_dtype=IFFChunkHeader,
     alignment=2,
     inclheader=True,
-    skip_byte=0x80,
+    skip_byte=None,
 )

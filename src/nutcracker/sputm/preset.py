@@ -1,9 +1,9 @@
+from nutcracker.kernel2 import preset
 from nutcracker.kernel2.chunk import IFFChunkHeader
-from nutcracker.kernel2.preset import Preset
 
 from .schema import SCHEMA
 
-sputm = Preset(
+sputm = preset.shell(
     header_dtype=IFFChunkHeader,
     alignment=1,
     inclheader=True,
