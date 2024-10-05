@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import os
+from typing import TYPE_CHECKING
 
 import numpy as np
 from PIL import Image
@@ -18,6 +19,11 @@ from .proom import (
     read_room_background,
     read_room_background_v8,
 )
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable, Iterator
+
+    from nutcracker.kernel2.element import Element
 
 
 def read_room_settings(lflf):
@@ -157,7 +163,7 @@ def read_objects(header, room, version):
                     yield path, name, im, obj_x, obj_y
 
 
-def get_rooms(root):
+def get_rooms(root: 'Iterable[Element]') -> 'Iterator[Element]':
     for elem in root:
         if elem.tag in {'LECF', 'LFLF'}:
             if elem.tag in {'LFLF'}:

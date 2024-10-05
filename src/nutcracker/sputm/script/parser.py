@@ -1,5 +1,5 @@
 from collections.abc import Callable, Iterable, Iterator
-from typing import IO
+from typing import IO, Protocol
 
 
 def read_message(
@@ -20,7 +20,7 @@ def read_message(
         yield c
 
 
-class ScriptArg:
+class ScriptArg(Protocol):
     def to_bytes(self) -> bytes: ...
 
 

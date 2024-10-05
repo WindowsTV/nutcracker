@@ -2,6 +2,8 @@ from collections.abc import Callable, Iterable, Mapping
 from functools import partial
 from typing import IO, TypeVar
 
+from nutcracker.sputm.script.opcodes_v5 import SomeOp
+
 from .parser import (
     ByteValue,
     CString,
@@ -12,7 +14,7 @@ from .parser import (
     WordValue,
 )
 
-OpTable = Mapping[int, Callable[[int, IO[bytes]], Statement]]
+OpTable = Mapping[int, Callable[[int, IO[bytes]], Statement | SomeOp]]
 
 T = TypeVar('T')
 R = TypeVar('R')

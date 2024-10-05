@@ -1,11 +1,15 @@
 import itertools
-from collections.abc import Sequence
-from typing import IO, Optional
+from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
+from typing import IO, Optional, Self, Unpack, cast
 
 from nutcracker.kernel2.fileio import ResourceFile
-from nutcracker.sputm.script.parser import ScriptArg
-
-from .opcodes import ByteValue, CString, RefOffset, WordValue
+from nutcracker.sputm.script.parser import (
+    ByteValue,
+    CString,
+    RefOffset,
+    ScriptArg,
+    WordValue,
+)
 
 PARAM_1 = 0x80
 PARAM_2 = 0x40
@@ -16,15 +20,28 @@ BYTE = (ByteValue,)
 WORD = (WordValue,)
 
 
-class SomeOp:
-    def __init__(self, name, opcode, offset, args) -> None:
+class SomeOp(ScriptArg):
+    def __init__(
+        self,
+        name: str,
+        opcode: int,
+        offset: int,
+        args: 'Sequence[ScriptArg]',
+    ) -> None:
         self.name = name
         self.opcode = opcode
         self.offset = offset
         self.args = args
+        self.terminate = False
 
     @classmethod
-    def parse(cls, name, ops, opcode, stream):
+    def parse(
+        cls,
+        name: str,
+        ops: 'Iterable[Callable[[int, IO[bytes]], Iterator[ScriptArg]]]',
+        opcode: int,
+        stream: IO[bytes],
+    ) -> 'Self':
         return cls(
             name,
             opcode,
@@ -50,8 +67,12 @@ class SomeOp:
         )
 
 
-def mop(name, *ops, terminate=False):
-    def inner(opcode, stream):
+def mop(
+    name: str,
+    *ops: 'Callable[[int, IO[bytes]], Iterator[ScriptArg]]',
+    terminate: bool = False,
+) -> Callable[[int, IO[bytes]], SomeOp]:
+    def inner(opcode: int, stream: IO[bytes]) -> SomeOp:
         res = SomeOp.parse(name, ops, opcode, stream)
         res.terminate = terminate
         return res
@@ -59,7 +80,7 @@ def mop(name, *ops, terminate=False):
     return inner
 
 
-def named(arg):
+def named(arg: 'Variable') -> 'str | Variable':
     # from SCUMM reference, appendix F
     defs = {
         0: 'complex-temp',
@@ -121,28 +142,28 @@ def named(arg):
     return defs.get(arg.num, arg)
 
 
-def value(arg):
+def value(arg: 'Variable | ByteValue | WordValue') -> 'str | int':
     if isinstance(arg, Variable):
-        return named(arg)
-    # return f"#{int.from_bytes(arg.op, byteorder='little', signed=False)}"
-    return f"{int.from_bytes(arg.op, byteorder='little', signed=False)}"
+        return str(named(arg))
+    display = f"{int.from_bytes(arg.op, byteorder='little', signed=False)}"
+    # Windex shows # before immediate values: return f"#{display}"
+    return display
 
 
-class Variable:
-    def __init__(self, num, more: Optional['Variable'] = None):
+class Variable(ScriptArg):
+    def __init__(self, num: int, more: Optional['Variable | WordValue'] = None) -> None:
         self.num = num
         self.more = more
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         more = f'[{value(self.more)}]' if self.more else ''
         if self.num & 0x4000:
             return f'L.{self.num - 0x4000}{more}'
         if self.num & 0x8000:
             return f'B.{self.num - 0x8000}{more}'
-        else:
-            return f'V.{self.num}{more}'
+        return f'V.{self.num}{more}'
 
-    def to_bytes(self):
+    def to_bytes(self) -> bytes:
         if isinstance(self.more, Variable):
             return (self.num | 0x2000).to_bytes(2, byteorder='little', signed=False) + (
                 self.more.num | 0x2000
@@ -156,7 +177,7 @@ class Variable:
         return self.num.to_bytes(2, byteorder='little', signed=False)
 
 
-def get_var(stream):
+def get_var(stream: IO[bytes]) -> 'Variable':
     var = Variable(
         int.from_bytes(WordValue(stream).op, byteorder='little', signed=False),
     )
@@ -165,9 +186,8 @@ def get_var(stream):
         more = int.from_bytes(word.op, byteorder='little', signed=False)
         if more & 0x2000:
             return Variable(var.num - 0x2000, Variable(more - 0x2000))
-        else:
-            # assert more < 0x2000, (var, more)
-            return Variable(var.num - 0x2000, word)
+        # assert more < 0x2000, (var, more)
+        return Variable(var.num - 0x2000, word)
     return var
 
 
@@ -176,31 +196,32 @@ def get_params(
     stream: IO[bytes],
     args: Sequence[type[ScriptArg]],
     masks: Sequence[int] = MASKS,
-):
+) -> Iterator[ScriptArg]:
     # NOTE: need to be lazy for do-sentence (o5_doSentence)
     assert len(args) <= len(masks)
-    for mask, ctype in zip(masks, args):
-        param = get_var(stream) if opcode & mask else ctype(stream)
+    for mask, ctype in zip(masks, args, strict=False):
+        cconst = cast(Callable[[IO[bytes]], ScriptArg], ctype)
+        param = get_var(stream) if opcode & mask else cconst(stream)
         assert isinstance(param, Variable if opcode & mask else ctype)
         yield param
 
 
-def RESULT(opcode, stream):
+def RESULT(opcode: int, stream: IO[bytes]) -> Iterator[Variable]:
     yield get_var(stream)
 
 
-class VarArgs:
-    def __init__(self, args):
+class VarArgs(ScriptArg):
+    def __init__(self, args: Iterable[ScriptArg]) -> None:
         self.args = tuple(args)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f'({", ".join(str(x) for x in self.args)})'
 
-    def to_bytes(self):
+    def to_bytes(self) -> bytes:
         return b''.join(x.to_bytes() for x in self.args)
 
 
-def WORD_VARARGS(opcode, stream):
+def WORD_VARARGS(opcode: int, stream: IO[bytes]) -> Iterator[VarArgs]:
     yield VarArgs(
         SUBMASK_VARARGS(
             0x1F,
@@ -211,8 +232,12 @@ def WORD_VARARGS(opcode, stream):
     )
 
 
-def SUBMASK_VARARGS(mask, mapping, term=0xFF):
-    def inner(opcode, stream):
+def SUBMASK_VARARGS(
+    mask: int,
+    mapping: dict[int, Callable[[int, IO[bytes]], SomeOp]],
+    term: int = 0xFF,
+) -> Callable[[int, IO[bytes]], Iterator[ScriptArg]]:
+    def inner(opcode: int, stream: IO[bytes]) -> Iterator[ScriptArg]:
         while True:
             sub = ByteValue(stream)
             if ord(sub.op) & mask == term & mask:
@@ -230,16 +255,20 @@ def SUBMASK_VARARGS(mask, mapping, term=0xFF):
     return inner
 
 
-def SUBMASK(mask, mapping):
-    def inner(opcode, stream):
+def SUBMASK(
+    mask: int, mapping: dict[int, Callable[[int, IO[bytes]], SomeOp]]
+) -> Callable[[int, IO[bytes]], Iterator[SomeOp]]:
+    def inner(opcode: int, stream: IO[bytes]) -> Iterator[SomeOp]:
         sub = ByteValue(stream)
         yield mapping[ord(sub.op) & mask](ord(sub.op), stream)
 
     return inner
 
 
-def PARAMS(*args):
-    def inner(opcode, stream):
+def PARAMS(
+    *args: Sequence[type[ScriptArg]],
+) -> Callable[[int, IO[bytes]], Iterator[ScriptArg]]:
+    def inner(opcode: int, stream: IO[bytes]) -> Iterator[ScriptArg]:
         for idx, arg in enumerate(args):
             if idx != 0:
                 sub = ByteValue(stream)
@@ -250,11 +279,13 @@ def PARAMS(*args):
     return inner
 
 
-def MSG_OP(opcode, stream):
+def MSG_OP(opcode: int, stream: IO[bytes]) -> Iterator[CString]:
     yield CString(stream)
 
 
-def STRING_SUBARGS(version=5):
+def STRING_SUBARGS(
+    version: int = 5,
+) -> Callable[[int, IO[bytes]], Iterator[ScriptArg]]:
     return SUBMASK_VARARGS(
         0x1F,
         {
@@ -272,28 +303,28 @@ def STRING_SUBARGS(version=5):
     )
 
 
-def VAR(opcode, stream):
+def VAR(opcode: int, stream: IO[bytes]) -> Iterator[Variable]:
     yield get_var(stream)
 
 
-def OFFSET(opcode, stream):
+def OFFSET(opcode: int, stream: IO[bytes]) -> Iterator[RefOffset]:
     yield RefOffset(stream)
 
 
-def IMWORD(opcode, stream):
+def IMWORD(opcode: int, stream: IO[bytes]) -> Iterator[WordValue]:
     yield WordValue(stream)
 
 
-def IMBYTE(opcode, stream):
+def IMBYTE(opcode: int, stream: IO[bytes]) -> Iterator[ByteValue]:
     yield ByteValue(stream)
 
 
-def OPERATION(opcode, stream):
+def OPERATION(opcode: int, stream: IO[bytes]) -> Iterator[SomeOp]:
     nest = ByteValue(stream)
     yield OPCODES_v5[nest.op[0] & 0x1F](nest.op[0], stream)
 
 
-def BYTE_VARARGS(opcode, stream):
+def BYTE_VARARGS(opcode: int, stream: IO[bytes]) -> Iterator[ByteValue]:
     while True:
         val = ByteValue(stream)
         yield val
@@ -301,14 +332,14 @@ def BYTE_VARARGS(opcode, stream):
             break
 
 
-def VAR_RANGE(opcode, stream):
+def VAR_RANGE(opcode: int, stream: IO[bytes]) -> Iterator[ByteValue | WordValue]:
     num = ByteValue(stream)
     yield num
     for _ in range(num.op[0]):
         yield WordValue(stream) if opcode & PARAM_1 else ByteValue(stream)
 
 
-def do_sentence_params(opcode, stream):
+def do_sentence_params(opcode: int, stream: IO[bytes]) -> Iterator[ScriptArg]:
     params = get_params(opcode, stream, BYTE + 2 * WORD)
     var = next(params)
     yield var
@@ -317,20 +348,29 @@ def do_sentence_params(opcode, stream):
     yield from params
 
 
-def flatop(*args, fallback=None):
+def flatop(
+    *args: tuple[
+        str,
+        set[int],
+        Unpack[Callable[[int, IO[bytes]], SomeOp]],
+    ],
+    fallback: None = None,
+) -> Callable[[int, IO[bytes]], SomeOp]:
     mapping = {}
     for name, opcodes, *params in args:
         func = mop(name, *params)
         for op in opcodes:
             mapping[op] = func
 
-    def inner(opcode, stream):
-        return mapping.get(opcode, fallback)(opcode, stream)
+    def inner(opcode: int, stream: IO[bytes]) -> SomeOp:
+        funcop = mapping.get(opcode, fallback)
+        assert funcop is not None, opcode
+        return funcop(opcode, stream)
 
     return inner
 
 
-def o5_stopObjectCode(opcode, stream):
+def o5_stopObjectCode(opcode: int, stream: IO[bytes]) -> SomeOp:
     return flatop(
         ('o5_stopObjectCode', {0x00}),
         ('o5_stopMusic', {0x20}),
@@ -342,11 +382,11 @@ def o5_stopObjectCode(opcode, stream):
     )(opcode, stream)
 
 
-def o5_putActor(opcode, stream):
+def o5_putActor(opcode: int, stream: IO[bytes]) -> SomeOp:
     return mop('o5_putActor', PARAMS(BYTE + 2 * WORD))(opcode, stream)
 
 
-def o5_startMusic(opcode, stream):
+def o5_startMusic(opcode: int, stream: IO[bytes]) -> SomeOp:
     return flatop(
         ('o5_startMusic', {0x02, 0x82}, PARAMS(BYTE)),
         ('o5_getAnimCounter', {0x22, 0xA2}, RESULT, PARAMS(BYTE)),
@@ -355,7 +395,7 @@ def o5_startMusic(opcode, stream):
     )(opcode, stream)
 
 
-def o5_getActorRoom(opcode, stream):
+def o5_getActorRoom(opcode: int, stream: IO[bytes]) -> SomeOp:
     return flatop(
         ('o5_getActorRoom', {0x03, 0x83}, RESULT, PARAMS(BYTE)),
         ('o5_getActorY', {0x23, 0xA3}, RESULT, PARAMS(WORD)),
@@ -364,7 +404,7 @@ def o5_getActorRoom(opcode, stream):
     )(opcode, stream)
 
 
-def o5_isGreaterEqual(opcode, stream):
+def o5_isGreaterEqual(opcode: int, stream: IO[bytes]) -> SomeOp:
     return flatop(
         ('o5_isGreaterEqual', {0x04, 0x84}, VAR, PARAMS(WORD), OFFSET),
         ('o5_isLess', {0x44, 0xC4}, VAR, PARAMS(WORD), OFFSET),
@@ -378,7 +418,7 @@ def o5_isGreaterEqual(opcode, stream):
     )(opcode, stream)
 
 
-def o5_drawObject(opcode, stream):
+def o5_drawObject(opcode: int, stream: IO[bytes]) -> SomeOp:
     return flatop(
         (
             'o5_drawObject',
@@ -396,7 +436,7 @@ def o5_drawObject(opcode, stream):
     )(opcode, stream)
 
 
-def o5_getActorElevation(opcode, stream):
+def o5_getActorElevation(opcode: int, stream: IO[bytes]) -> SomeOp:
     return flatop(
         ('o5_getActorElevation', {0x06, 0x86}, RESULT, PARAMS(BYTE)),
         ('o5_setVarRange', {0x26, 0xA6}, RESULT, VAR_RANGE),
@@ -406,7 +446,7 @@ def o5_getActorElevation(opcode, stream):
     )(opcode, stream)
 
 
-def o5_setState(opcode, stream):
+def o5_setState(opcode: int, stream: IO[bytes]) -> SomeOp:
     return flatop(
         ('o5_setState', {0x07, 0x47, 0x87, 0xC7}, PARAMS(WORD + BYTE)),
         (
@@ -428,7 +468,7 @@ def o5_setState(opcode, stream):
     )(opcode, stream)
 
 
-def o5_isNotEqual(opcode, stream):
+def o5_isNotEqual(opcode: int, stream: IO[bytes]) -> SomeOp:
     return flatop(
         ('o5_isNotEqual', {0x08, 0x88}, VAR, PARAMS(WORD), OFFSET),
         ('o5_equalZero', {0x28}, VAR, OFFSET),
@@ -438,18 +478,18 @@ def o5_isNotEqual(opcode, stream):
     )(opcode, stream)
 
 
-def o5_faceActor(opcode, stream):
+def o5_faceActor(opcode: int, stream: IO[bytes]) -> SomeOp:
     return flatop(
         ('o5_faceActor', {0x09, 0x49, 0x89, 0xC9}, PARAMS(BYTE + WORD)),
         ('o5_setOwnerOf', {0x29, 0x69, 0xA9, 0xE9}, PARAMS(WORD + BYTE)),
     )(opcode, stream)
 
 
-def o5_startScript(opcode, stream):
+def o5_startScript(opcode: int, stream: IO[bytes]) -> SomeOp:
     return mop('o5_startScript', PARAMS(BYTE), WORD_VARARGS)(opcode, stream)
 
 
-def o5_getVerbEntrypoint(opcode, stream):
+def o5_getVerbEntrypoint(opcode: int, stream: IO[bytes]) -> SomeOp:
     return flatop(
         ('o5_getVerbEntrypoint', {0x0B, 0x4B, 0x8B, 0xCB}, RESULT, PARAMS(2 * WORD)),
         ('o5_delayVariable', {0x2B}, VAR),
@@ -469,7 +509,7 @@ def o5_getVerbEntrypoint(opcode, stream):
     )(opcode, stream)
 
 
-def o5_resourceRoutines(opcode, stream):
+def o5_resourceRoutines(opcode: int, stream: IO[bytes]) -> SomeOp:
     return flatop(
         (
             'o5_resourceRoutines',
@@ -549,14 +589,14 @@ def o5_resourceRoutines(opcode, stream):
     )(opcode, stream)
 
 
-def o5_walkActorToActor(opcode, stream):
+def o5_walkActorToActor(opcode: int, stream: IO[bytes]) -> SomeOp:
     return flatop(
         ('o5_walkActorToActor', {0x0D, 0x4D, 0x8D, 0xCD}, PARAMS(2 * BYTE), IMBYTE),
         ('o5_putActorInRoom', {0x2D, 0x6D, 0xAD, 0xED}, PARAMS(2 * BYTE)),
     )(opcode, stream)
 
 
-def o5_putActorAtObject(opcode, stream):
+def o5_putActorAtObject(opcode: int, stream: IO[bytes]) -> SomeOp:
     return flatop(
         ('o5_putActorAtObject', {0x0E, 0x4E, 0x8E, 0xCE}, PARAMS(BYTE + WORD)),
         ('o5_delay', {0x2E}, IMBYTE, IMBYTE, IMBYTE),
@@ -577,13 +617,13 @@ def o5_putActorAtObject(opcode, stream):
     )(opcode, stream)
 
 
-def o5_getObjectState(opcode, stream):
+def o5_getObjectState(opcode: int, stream: IO[bytes]) -> SomeOp:
     return flatop(
         ('o5_getObjectState', {0x0F, 0x8F}, RESULT, PARAMS(WORD)),
     )(opcode, stream)
 
 
-def o5_getObjectOwner(opcode, stream, version=5):
+def o5_getObjectOwner(opcode: int, stream: IO[bytes], version: int = 5) -> SomeOp:
     return flatop(
         ('o5_getObjectOwner', {0x10, 0x90}, RESULT, PARAMS(WORD)),
         (
@@ -603,7 +643,7 @@ def o5_getObjectOwner(opcode, stream, version=5):
     )(opcode, stream)
 
 
-def o5_animateActor(opcode, stream):
+def o5_animateActor(opcode: int, stream: IO[bytes]) -> SomeOp:
     return flatop(
         ('o5_animateActor', {0x11, 0x51, 0x91, 0xD1}, PARAMS(2 * BYTE)),
         ('o5_getActorCostume', {0x71, 0xF1}, RESULT, PARAMS(BYTE)),
@@ -611,7 +651,7 @@ def o5_animateActor(opcode, stream):
     )(opcode, stream)
 
 
-def o5_panCameraTo(opcode, stream):
+def o5_panCameraTo(opcode: int, stream: IO[bytes]) -> SomeOp:
     return flatop(
         ('o5_panCameraTo', {0x12, 0x92}, PARAMS(WORD)),
         ('o5_setCameraAt', {0x32, 0xB2}, PARAMS(WORD)),
@@ -644,7 +684,7 @@ actor_convert = [
 ]
 
 
-def o5_actorOps(opcode, stream, version=5):
+def o5_actorOps(opcode: int, stream: IO[bytes], version: int = 5) -> SomeOp:
     # support for version <5 by
     # op = (op & 0xE0) | actor_convert[(op & 0x1F) - 1]
     # also note special case when subop is 0x11: PARAMS(BYTE)
@@ -722,7 +762,7 @@ def o5_actorOps(opcode, stream, version=5):
     )(opcode, stream)
 
 
-def o5_print(opcode, stream, version=5):
+def o5_print(opcode: int, stream: IO[bytes], version: int = 5) -> SomeOp:
     return flatop(
         ('o5_print', {0x14, 0x94}, PARAMS(BYTE), STRING_SUBARGS(version=version)),
         ('o5_setObjectName', {0x54, 0xD4}, PARAMS(WORD), MSG_OP),
@@ -730,14 +770,14 @@ def o5_print(opcode, stream, version=5):
     )(opcode, stream)
 
 
-def o5_actorFromPos(opcode, stream):
+def o5_actorFromPos(opcode: int, stream: IO[bytes]) -> SomeOp:
     return flatop(
         ('o5_actorFromPos', {0x15, 0x55, 0x95, 0xD5}, RESULT, PARAMS(2 * WORD)),
         ('o5_findObject', {0x35, 0x75, 0xB5, 0xF5}, RESULT, PARAMS(2 * BYTE)),
     )(opcode, stream)
 
 
-def o5_getRandomNr(opcode, stream):
+def o5_getRandomNr(opcode: int, stream: IO[bytes]) -> SomeOp:
     return flatop(
         ('o5_getRandomNr', {0x16, 0x96}, RESULT, PARAMS(BYTE)),
         ('o5_getActorMoving', {0x56, 0xD6}, RESULT, PARAMS(BYTE)),
@@ -745,7 +785,7 @@ def o5_getRandomNr(opcode, stream):
     )(opcode, stream)
 
 
-def o5_and(opcode, stream):
+def o5_and(opcode: int, stream: IO[bytes]) -> SomeOp:
     return flatop(
         ('o5_and', {0x17, 0x97}, RESULT, PARAMS(WORD)),
         ('o5_or', {0x57, 0xD7}, RESULT, PARAMS(WORD)),
@@ -753,7 +793,7 @@ def o5_and(opcode, stream):
     )(opcode, stream)
 
 
-def o5_jumpRelative(opcode, stream, version=5):
+def o5_jumpRelative(opcode: int, stream: IO[bytes], version: int = 5) -> SomeOp:
     return flatop(
         ('o5_jumpRelative', {0x18}, OFFSET),
         (
@@ -785,11 +825,11 @@ def o5_jumpRelative(opcode, stream, version=5):
     )(opcode, stream)
 
 
-def o5_doSentence(opcode, stream):
+def o5_doSentence(opcode: int, stream: IO[bytes]) -> SomeOp:
     return mop('o5_doSentence', do_sentence_params)(opcode, stream)
 
 
-def o5_move(opcode, stream):
+def o5_move(opcode: int, stream: IO[bytes]) -> SomeOp:
     return flatop(
         ('o5_move', {0x1A, 0x9A}, RESULT, PARAMS(WORD)),
         ('o5_subtract', {0x3A, 0xBA}, RESULT, PARAMS(WORD)),
@@ -823,7 +863,7 @@ def o5_move(opcode, stream):
     )(opcode, stream)
 
 
-def o5_multiply(opcode, stream):
+def o5_multiply(opcode: int, stream: IO[bytes]) -> SomeOp:
     return flatop(
         ('o5_multiply', {0x1B, 0x9B}, RESULT, PARAMS(WORD)),
         ('o5_getActorScale', {0x3B, 0xBB}, RESULT, PARAMS(BYTE)),
@@ -832,7 +872,7 @@ def o5_multiply(opcode, stream):
     )(opcode, stream)
 
 
-def o5_startSound(opcode, stream):
+def o5_startSound(opcode: int, stream: IO[bytes]) -> SomeOp:
     return flatop(
         ('o5_startSound', {0x1C, 0x9C}, PARAMS(BYTE)),
         ('o5_stopSound', {0x3C, 0xBC}, PARAMS(BYTE)),
@@ -840,7 +880,7 @@ def o5_startSound(opcode, stream):
     )(opcode, stream)
 
 
-def o5_ifClassOfIs(opcode, stream):
+def o5_ifClassOfIs(opcode: int, stream: IO[bytes]) -> SomeOp:
     return flatop(
         ('o5_ifClassOfIs', {0x1D, 0x9D}, PARAMS(WORD), WORD_VARARGS, OFFSET),
         ('o5_findInventory', {0x3D, 0x7D, 0xBD, 0xFD}, RESULT, PARAMS(2 * BYTE)),
@@ -848,19 +888,21 @@ def o5_ifClassOfIs(opcode, stream):
     )(opcode, stream)
 
 
-def o5_walkActorTo(opcode, stream):
+def o5_walkActorTo(opcode: int, stream: IO[bytes]) -> SomeOp:
     return mop('o5_walkActorTo', PARAMS(BYTE + 2 * WORD))(opcode, stream)
 
 
-def o5_isActorInBox(opcode, stream):
+def o5_isActorInBox(opcode: int, stream: IO[bytes]) -> SomeOp:
     return flatop(
         ('o5_drawBox', {0x3F, 0x7F, 0xBF, 0xFF}, PARAMS(2 * WORD, 2 * WORD + BYTE)),
     )(opcode, stream)
 
 
-def realize_v5(mapping):
-    # emulate: op = opcodes[opcode & 0x1F](opcode, stream)
-    return dict((0x20 * i + key, val) for i in range(8) for key, val in mapping.items())
+def realize_v5(
+    mapping: Mapping[int, Callable[[int, IO[bytes]], SomeOp]],
+) -> Mapping[int, Callable[[int, IO[bytes]], SomeOp]]:
+    # This emulates: op = opcodes[opcode & 0x1F](opcode, stream)
+    return {(0x20 * i + key): val for i in range(8) for key, val in mapping.items()}
 
 
 OPCODES_v5 = realize_v5(
