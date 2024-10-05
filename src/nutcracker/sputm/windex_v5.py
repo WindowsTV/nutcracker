@@ -38,7 +38,8 @@ def fstat(stat, *args, **kwargs):
 
 def build_params(mapping, args):
     for subop in args:
-        if isinstance(subop, ByteValue) and ord(subop.op) == 0xFF:
+        if isinstance(subop, ByteValue) and ord(subop.op) in {0x1F, 0xFF}:
+            # 0x1F is used by Monkey Island UTE
             break
         fmt = mapping.get(subop.name)
         if fmt is None:
@@ -1223,7 +1224,7 @@ def transform_asts(indent, asts, transform=True):
                 if isinstance(ex, (UnconditionalJump, ConditionalJump)):
                     if adr(ex.ref) == f'&{label}':
                         ext = asts[label].pop()
-                        assert ext == ex
+                        assert ext == ex, (ext, ex)
                         if [str(st) for st in asts[label]] == [
                             'break-here',
                         ] and isinstance(ex, ConditionalJump):

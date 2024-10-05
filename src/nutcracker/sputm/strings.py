@@ -110,7 +110,7 @@ def update_element_strings(
                     entries = [(idx, bc[off - 8].offset + 8) for idx, off in pref]
                     serial = compose_verb_meta(entries)
                 attribs = elem.attribs
-                elem.update_raw(serial + to_bytes(updated))
+                elem.update_raw(bytes(serial) + to_bytes(updated))
                 elem.attribs = attribs
             else:
                 elem.update_children(

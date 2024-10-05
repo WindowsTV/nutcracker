@@ -44,9 +44,9 @@ class ResourceFile(AbstractContextManager[memoryview]):
     def load(cls, file_path: str, key: int = 0x00) -> Iterator[memoryview]:
         data = np.memmap(file_path, dtype='u1', mode='r')
 
-        if key == 0x00:
-            yield cast(memoryview, cls(data))
-            return
+        # if key == 0x00:
+        #     yield cast(memoryview, cls(data))
+        #     return
 
         with tempfile.TemporaryFile() as tmp:
             result = np.memmap(tmp, dtype='u1', mode='w+', shape=data.shape)

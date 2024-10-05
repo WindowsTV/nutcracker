@@ -215,7 +215,10 @@ def SUBMASK_VARARGS(mask, mapping, term=0xFF):
     def inner(opcode, stream):
         while True:
             sub = ByteValue(stream)
-            if ord(sub.op) == term:
+            if ord(sub.op) & mask == term & mask:
+                # if ord(sub.op) != mask:
+                #     # This happens in Monkey Island UTE
+                #     print('WARNING: terminating by submask')
                 yield sub
                 break
             op = ord(sub.op)
