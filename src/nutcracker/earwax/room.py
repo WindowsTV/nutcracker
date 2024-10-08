@@ -6,7 +6,7 @@ from collections.abc import Sequence
 
 import numpy as np
 
-from nutcracker.codex.smap import decode_smap
+from nutcracker.codex.smap import parse_strip, read_uint32le
 from nutcracker.earwax.older_room import read_uint16le
 from nutcracker.earwax.resource import open_game_resource
 from nutcracker.graphics.image import convert_to_pil_image
@@ -16,6 +16,32 @@ from nutcracker.utils.funcutils import flatten
 
 def read_uint16les(stream):
     return read_uint16le(stream.read(2))
+
+
+def decode_smap_vga(
+    height: int,
+    width: int,
+    data: bytes,
+    transparency: bytes = None,
+) -> Sequence[Sequence[int]]:
+    strip_width = 8
+
+    if width == 0 or height == 0:
+        return None
+
+    num_strips = width // strip_width
+    with io.BytesIO(data) as s:
+        offs = [(read_uint32le(s) - 4) for _ in range(num_strips)]
+        print(offs)
+        assert sorted(offs) == offs, offs
+        assert s.tell() == offs[0], (s.tell(), offs[0])
+
+    index = list(zip(offs, offs[1:] + [len(data)]))
+
+    strips = (data[offset:end] for offset, end in index)
+    return np.hstack(
+        [parse_strip(height, strip_width, data, transparency) for data in strips],
+    )
 
 
 def parse_strip_ega(height, strip_width, data):
@@ -65,6 +91,9 @@ def decode_smap(height: int, width: int, data: bytes) -> Sequence[Sequence[int]]
 
     with io.BytesIO(data) as s:
         offs = [(read_uint16les(s) - 2) for _ in range(num_strips)]
+        assert sorted(offs) == offs, offs
+        assert s.tell() == offs[0], (s.tell(), offs[0])
+
     index = list(zip(offs, offs[1:] + [len(data)]))
 
     strips = (data[offset:end] for offset, end in index)
@@ -105,13 +134,22 @@ if __name__ == '__main__':
                 width = read_uint16le(hd.data, 0)
                 height = read_uint16le(hd.data, 2)
 
+                pa = earwax.find('PA', ro)
+
                 im = earwax.find('BM', ro)
                 if im:
-                    bgim = decode_smap(height, width, im.data)
-                    imx = convert_to_pil_image(bgim)
-                    imx.putpalette(EGA_PALETTE)
-                    imx.save(basename / 'backgrounds' / f'room_{room_id:02d}.png')
-                    # assert np.array_equal(decode_smap(height, width, im.data[:2] + encode_smap(bgim)), bgim)
+                    if pa:
+                        print('VGA ROOM', im.data[:4])
+                        bgim = decode_smap_vga(height, width, im.data[4:])
+                        imx = convert_to_pil_image(bgim)
+                        imx.putpalette(pa.data[2:])
+                        imx.save(basename / 'backgrounds' / f'room_{room_id:02d}.png')
+                    else:
+                        bgim = decode_smap(height, width, im.data)
+                        imx = convert_to_pil_image(bgim)
+                        imx.putpalette(EGA_PALETTE)
+                        imx.save(basename / 'backgrounds' / f'room_{room_id:02d}.png')
+                        # assert np.array_equal(decode_smap(height, width, im.data[:2] + encode_smap(bgim)), bgim)
 
                 for oi in earwax.findall('OI', ro):
                     for oc in earwax.findall('OC', ro):
@@ -121,16 +159,32 @@ if __name__ == '__main__':
                                 read_uint16le(oc.data, 0),
                                 obj_id,
                             )
-                            assert read_uint16le(oi.data, 0) == obj_id, (read_uint16le(oi.data, 0), obj_id)
+                            assert read_uint16le(oi.data, 0) == obj_id, (
+                                read_uint16le(oi.data, 0),
+                                obj_id,
+                            )
                             width = oc.data[5] * 8
                             height = oc.data[11] & 0xF8
                             if not oi.data[2:]:
                                 continue
-                            oiim = decode_smap(height, width, oi.data[2:])
-                            imx = convert_to_pil_image(oiim)
-                            imx.putpalette(EGA_PALETTE)
-                            imx.save(
-                                basename
-                                / 'objects'
-                                / f'room_{room_id:02d}_object_{obj_id:04d}.png',
-                            )
+                            if pa:
+                                print('VGA OBJECT', oi.data[2:6])
+                                oiim = decode_smap_vga(
+                                    height, width, oi.data[6:], pa.data
+                                )
+                                imx = convert_to_pil_image(oiim)
+                                imx.putpalette(pa.data[2:])
+                                imx.save(
+                                    basename
+                                    / 'objects'
+                                    / f'room_{room_id:02d}_object_{obj_id:04d}.png',
+                                )
+                            else:
+                                oiim = decode_smap(height, width, oi.data[2:])
+                                imx = convert_to_pil_image(oiim)
+                                imx.putpalette(EGA_PALETTE)
+                                imx.save(
+                                    basename
+                                    / 'objects'
+                                    / f'room_{room_id:02d}_object_{obj_id:04d}.png',
+                                )

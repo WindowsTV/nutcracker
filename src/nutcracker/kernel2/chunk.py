@@ -110,9 +110,13 @@ class ChunkLike(Protocol):
     @property
     def tag(self) -> str:
         """Return the chunk tag."""
+
     @property
     def data(self) -> ArrayBuffer:
         """Return the chunk data buffer."""
+
+
+NULL_TAG = '_'
 
 
 @dataclass(frozen=True, slots=True)
@@ -122,6 +126,8 @@ class Chunk:
 
     @property
     def tag(self) -> str:
+        if not self.header.tag:
+            return NULL_TAG
         return self.header.tag.decode('ascii')
 
     def __len__(self) -> int:
@@ -218,6 +224,8 @@ def mktag(
     buffer: ArrayBuffer,
 ) -> Chunk:
     size = len(buffer)
+    if tag == NULL_TAG:
+        tag = ''
     if cfg.inclheader:
         size += cfg.header_dtype.itemsize()
     header = cfg.header_dtype.create(
