@@ -52,6 +52,7 @@ def decode_basic(stream, decoded_size, palen):
                     color = collect_bits(bitstream, palen)
                     sub = 1
             out.write(to_byte(color))
+        assert not stream.read()
         return out.getvalue()
 
 
@@ -79,6 +80,7 @@ def decode_run_majmin(stream, decoded_size, palen):
             #     print('SMALL GROUP')
             out.write(to_byte(color))
 
+        assert not stream.read()
         return out.getvalue()
 
 
@@ -338,9 +340,8 @@ def parse_strip(height, width, data, transparency=None):
                 print('ORIG', orig)
                 print('ENCODED', encoded)
                 exit(1)
-            # The assertion below breaks on Loom CD version
-            # elif len(orig) > len(encoded):
-            #     assert encoded + b'\x00' == orig, (encoded, orig)
+            elif len(orig) > len(encoded):
+                assert encoded + b'\x00' == orig, (encoded, orig)
             s.seek(pos)
 
         # Verify nothing left in stream

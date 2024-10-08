@@ -29,14 +29,17 @@ def decode_smap_vga(
     if width == 0 or height == 0:
         return None
 
+    size = int.from_bytes(data[:4], byteorder='little') - 4
+    data = data[4:]
+
     num_strips = width // strip_width
     with io.BytesIO(data) as s:
         offs = [(read_uint32le(s) - 4) for _ in range(num_strips)]
-        print(offs)
+        print(offs, len(data))
         assert sorted(offs) == offs, offs
         assert s.tell() == offs[0], (s.tell(), offs[0])
 
-    index = list(zip(offs, offs[1:] + [len(data)]))
+    index = list(zip(offs, offs[1:] + [size]))
 
     strips = (data[offset:end] for offset, end in index)
     return np.hstack(
@@ -87,6 +90,7 @@ def decode_smap(height: int, width: int, data: bytes) -> Sequence[Sequence[int]]
         return None
 
     num_strips = width // strip_width
+    size = int.from_bytes(data[:2], byteorder='little') - 2
     data = data[2:]
 
     with io.BytesIO(data) as s:
@@ -94,7 +98,7 @@ def decode_smap(height: int, width: int, data: bytes) -> Sequence[Sequence[int]]
         assert sorted(offs) == offs, offs
         assert s.tell() == offs[0], (s.tell(), offs[0])
 
-    index = list(zip(offs, offs[1:] + [len(data)]))
+    index = list(zip(offs, offs[1:] + [size]))
 
     strips = (data[offset:end] for offset, end in index)
     return np.hstack([parse_strip_ega(height, strip_width, data) for data in strips])
@@ -139,8 +143,7 @@ if __name__ == '__main__':
                 im = earwax.find('BM', ro)
                 if im:
                     if pa:
-                        print('VGA ROOM', im.data[:4])
-                        bgim = decode_smap_vga(height, width, im.data[4:])
+                        bgim = decode_smap_vga(height, width, im.data)
                         imx = convert_to_pil_image(bgim)
                         imx.putpalette(pa.data[2:])
                         imx.save(basename / 'backgrounds' / f'room_{room_id:02d}.png')
@@ -168,9 +171,8 @@ if __name__ == '__main__':
                             if not oi.data[2:]:
                                 continue
                             if pa:
-                                print('VGA OBJECT', oi.data[2:6])
                                 oiim = decode_smap_vga(
-                                    height, width, oi.data[6:], pa.data
+                                    height, width, oi.data[2:], pa.data
                                 )
                                 imx = convert_to_pil_image(oiim)
                                 imx.putpalette(pa.data[2:])
