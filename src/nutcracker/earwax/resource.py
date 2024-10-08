@@ -183,6 +183,10 @@ def open_game_resource(filename: str, chiper_key=0x00):
             return res
 
         disk_file = os.path.join(basedir, disk_pattetn.format(disk=disk_id))
+        if not os.path.exists(disk_file):
+            # TODO: read from '{disk:01d}{num:02d}.LFL'
+            print(f'WARNING: Ignoring disk {disk_id}')
+            continue
         res = read_file(disk_file, key=0x69)
         schema = earwax.generate_schema(res)
         root = list(earwax(schema=schema, extra=update_element_path).map_chunks(res))
