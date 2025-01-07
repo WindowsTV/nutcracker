@@ -19,6 +19,7 @@ jobs:
         - windows-latest
         - ubuntu-latest
         - macos-latest
+        - macos-13
     defaults:
       run:
         shell: bash
@@ -44,5 +45,5 @@ jobs:
 
     - uses: actions/upload-artifact@v4
       with:
-        name: nutcracker-${{ runner.os }}
+        name: nutcracker-${{ runner.os }}_${{ runner.arch }}
         path: dist/*
