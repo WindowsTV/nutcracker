@@ -16,11 +16,13 @@ Tools for editing resources in SCUMM games.
 ## Installation
 Latest development binaries can be downloaded here
 
-Linux: https://nightly.link/BLooperZ/nutcracker/workflows/main/develop/nutcracker-Linux.zip
+Linux: https://nightly.link/BLooperZ/nutcracker/workflows/main/develop/nutcracker-Linux_X64.zip
 
-macOS: https://nightly.link/BLooperZ/nutcracker/workflows/main/develop/nutcracker-macOS.zip
+macOS (Apple silicon) https://nightly.link/BLooperZ/nutcracker/workflows/main/develop/nutcracker-macOS_ARM64.zip
 
-Windows: https://nightly.link/BLooperZ/nutcracker/workflows/main/develop/nutcracker-Windows.zip
+macOS (Intel-based): https://nightly.link/BLooperZ/nutcracker/workflows/main/develop/nutcracker-macOS_X64.zip
+
+Windows: https://nightly.link/BLooperZ/nutcracker/workflows/main/develop/nutcracker-Windows_X64.zip
 
 
 Thanks to https://nightly.link/
