@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 
 import io
-from collections.abc import Callable, Iterable, Iterator, Mapping
-from string import printable
+from collections.abc import Callable, Container, Iterable, Iterator, Mapping
 from typing import TypedDict
 
 from nutcracker.kernel2.element import Element
@@ -128,7 +127,7 @@ def update_element_strings(
 
 def escape_message(
     msg: bytes,
-    escape: bytes | None = None,
+    escapes: Container[bytes] = (),
     var_size: int = 2,
 ) -> Iterator[bytes]:
     with io.BytesIO(msg) as stream:
@@ -137,15 +136,14 @@ def escape_message(
             if c in {b'', b'\0'}:
                 break
             assert c is not None
-            if c == escape:
+            if c in escapes:
                 t = stream.read(1)
                 c += t
                 if ord(t) not in {1, 2, 3, 8}:
                     c += stream.read(var_size)
                 c = b''.join(f'\\x{v:02X}'.encode() for v in c)
-            elif c not in (
-                printable.encode() + bytes(range(ord('\xe0'), ord('\xfa') + 1))
-            ):
+            elif c < b' ':
+                # Control characters
                 c = b''.join(f'\\x{v:02X}'.encode() for v in c)
             elif c == b'\\':
                 c = b'\\\\'
@@ -185,7 +183,7 @@ def msg_to_print(
     assert b'\\xd9' not in msg
     assert b'\\x0D' not in msg
     assert b'\\x09' not in msg
-    escaped = b''.join(escape_message(msg, escape=b'\xff', var_size=var_size))
+    escaped = b''.join(escape_message(msg, escapes={b'\xff', b'\xfe'}, var_size=var_size))
     assert b'\n' not in escaped
     line = (
         escaped.replace(b'\r', b'\\x0D')
