@@ -26,7 +26,8 @@ if __name__ == '__main__':
         with open(filename, 'rb') as res:
             basename, _ = os.path.splitext(os.path.basename(filename))
             print(basename)
-            saud = smush.assert_tag('SAUD', smush.untag(res))
+            _, gchunk = smush.untag(res)
+            saud = smush.assert_tag('SAUD', gchunk)
             assert res.read() == b''
 
             sound = b''

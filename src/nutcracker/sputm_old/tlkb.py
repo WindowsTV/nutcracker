@@ -22,7 +22,8 @@ if __name__ == '__main__':
     target_dir = pathlib.Path('OUT') / basename
     os.makedirs(target_dir, exist_ok=True)
 
-    tlkb = sputm.assert_tag('TLKB', sputm.untag(res))
+    _, gchunk = sputm.untag(res)
+    tlkb = sputm.assert_tag('TLKB', gchunk)
     chunks = (
         (offset + 8, sputm.assert_tag('TALK', chunk))
         for offset, chunk in sputm.read_chunks(tlkb)
