@@ -2404,11 +2404,11 @@ def o6_cursorCommand(op, stack, game):
         return 'userput soft-off'
     elif cmd.num == 0x99:
         if game.he_version >= 70 or game.version >= 7:
-            # TODO: Figure out object?
-            return f'cursor {stack.pop()}'
-        # TODO: another pop for non HE or HE < 70 games
+            obj = stack.pop()
+            return f'cursor {obj}'
         image = stack.pop()
-        return f'cursor {stack.pop()} image {image}'
+        obj = stack.pop()
+        return f'cursor {obj} image {image}'
     elif cmd.num == 0x9A:
         ypos = stack.pop()
         xpos = stack.pop()
@@ -2560,7 +2560,11 @@ def o6_actorOps(op, stack, game):
         return f'\ttalk-animation {start} {stop}'
     if cmd.num == 81:
         return f'\tstand-animation {stack.pop()}'
-    # TODO: 82 - animation - 3 pops
+    if cmd.num == 82:
+        third = stack.pop()
+        second = stack.pop()
+        first = stack.pop()
+        return f'\tanimation {first} {second} {third}'
     if cmd.num == 83:
         return '\tdefault'
     if cmd.num == 84:
@@ -2614,7 +2618,8 @@ def o6_actorOps(op, stack, game):
         return f'\tto-zplane {stack.pop()}'
     if cmd.num == 228:
         return f'\tactor-walk-script {stack.pop()}'
-    # TODO: 229 - actor-stop - no pops
+    if cmd.num == 229:
+        return '\tactor-stop'
     if cmd.num == 230:
         return f'\tdirection {stack.pop()}'
     if cmd.num == 231:
@@ -2692,8 +2697,10 @@ def o72_actorOps(op, stack, game):
         return f'\tbox {left},{top} to {right},{bottom}'
     if cmd.num == 68:
         return f'\terase {stack.pop()}'
-    # TODO: 156 - charset - 1 pop
-    # TODO: 175 - room palette - 1 pop
+    if cmd.num == 156:
+        return f'\tcharset {stack.pop()}'
+    if cmd.num == 175:
+        return f'\troom-palette {stack.pop()}'
     if cmd.num == 218:
         return '\tbackground-on'
     if cmd.num == 219:
@@ -2898,13 +2905,23 @@ def o8_actorOps(op, stack, game):
         return f'\tpan {stack.pop()}'
     # if cmd.num == 78:
     #     return f'\tsound {get_params(stack)}'
-    # # TODO: 82 - animation - 3 pops
-    # TODO: 228 - actor-walk-script 1 pop
-    # TODO: 229 - actor-stop - no pops
-    # TODO: 230 - direction - 1 pop
-    # TODO: 233 - stop-walk - no pops
-    # TODO: 234 - resume-walk - no pops
-    # TODO: 235 - talk-script - 1 pop
+    if cmd.num == 82:
+        third = stack.pop()
+        second = stack.pop()
+        first = stack.pop()
+        return f'\tanimation {first} {second} {third}'
+    if cmd.num == 228:
+        return f'\tactor-walk-script {stack.pop()}'
+    if cmd.num == 229:
+        return '\tactor-stop'
+    if cmd.num == 230:
+        return f'\tdirection {stack.pop()}'
+    if cmd.num == 233:
+        return '\tstop-walk'
+    if cmd.num == 234:
+        return '\tresume-walk'
+    if cmd.num == 235:
+        return f'\ttalk-script {stack.pop()}'
     return defop(op, stack, game)
 
 
@@ -3120,9 +3137,10 @@ def o90_getSpriteInfo(op, stack, game):
         stack.append(f'$ sprite-priority {sprite}')
         return
     if sub.num == 45:
-        # TODO: extra argument for he 98 + another extra for he 99
-        # flags = stack.pop()
-        # stype = stack.pop()
+        if game.he_version >= 99:
+            stack.pop()
+        if game.he_version >= 98:
+            stack.pop()
         group = stack.pop()
         ypos = stack.pop()
         xpos = stack.pop()
@@ -4189,7 +4207,8 @@ def o6_saveRestoreVerbs(op, stack, game):
     if cmd.num == 142:
         return f'verbs-restore {start} to {end} set {setval}'
         # return f'restore-verbs {start} to {end} set {setval}'
-    # TODO: 143: verbs-delete {start} to {end} set {setval}
+    if cmd.num == 143:
+        return f'verbs-delete {start} to {end} set {setval}'
     return defop(op, stack, game)
 
 
@@ -4202,8 +4221,9 @@ def o70_systemOps(op, stack, game):
         return '$ prompt-exit'
     if cmd.num == 244:
         return '$ quit'
-    # TODO: 150/151: Start Executable
-    # TODO: 252/253: Start Game (same as Start Executable?)
+    if cmd.num in {150, 151, 252, 253}:
+        program = pop_str(stack)
+        return f'$ start-executable {program}'
     return defop(op, stack, game)
 
 
@@ -4851,6 +4871,18 @@ def o90_startScriptUnk(op, stack, game):
 
 
 @regop
+def o90_priorityStartScript(op, stack, game):
+    params = get_params(stack)
+    param_str = ', '.join(str(param) for param in params)
+    if param_str:
+        param_str = f' ( {param_str} )'
+    cycle = stack.pop()
+    scr = stack.pop()
+    flags = Value(op.args[0], signed=False)
+    return f'priority-start-script {scr}[{flags}]{{{cycle}}}{param_str}'
+
+
+@regop
 def o100_startScriptUnk(op, stack, game):
     params = get_params(stack)
     param_str = ', '.join(str(param) for param in params)
@@ -4875,6 +4907,18 @@ def o90_jumpToScriptUnk(op, stack, game):
 
 
 @regop
+def o90_priorityChainScript(op, stack, game):
+    params = get_params(stack)
+    param_str = ', '.join(str(param) for param in params)
+    if param_str:
+        param_str = f' ( {param_str} )'
+    cycle = stack.pop()
+    scr = stack.pop()
+    flags = Value(op.args[0], signed=False)
+    return f'priority-chain-script {scr}[{flags}]{{{cycle}}}{param_str}'
+
+
+@regop
 def o100_startScript(op, stack, game):
     params = get_params(stack)
     param_str = ', '.join(str(param) for param in params)
@@ -4889,7 +4933,10 @@ def o100_startScript(op, stack, game):
 
 @regop
 def o6_panCameraTo(op, stack, game):
-    # TODO: v7 uses 2 pops, x y
+    if game.version >= 7:
+        y = stack.pop()
+        x = stack.pop()
+        return f'camera-pan-to {x},{y}'
     xpos = stack.pop()
     return f'camera-pan-to {xpos}'
 
