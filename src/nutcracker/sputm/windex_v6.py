@@ -4899,6 +4899,18 @@ def o90_startScriptUnk(op, stack, game):
 
 
 @regop
+def o90_priorityStartScript(op, stack, game):
+    params = get_params(stack)
+    param_str = ', '.join(str(param) for param in params)
+    if param_str:
+        param_str = f' ( {param_str} )'
+    cycle = stack.pop()
+    scr = stack.pop()
+    flags = Value(op.args[0], signed=False)
+    return f'priority-start-script {scr}[{flags}]{{{cycle}}}{param_str}'
+
+
+@regop
 def o100_startScriptUnk(op, stack, game):
     params = get_params(stack)
     param_str = ', '.join(str(param) for param in params)
@@ -4920,6 +4932,18 @@ def o90_jumpToScriptUnk(op, stack, game):
     scr = stack.pop()
     flags = Value(op.args[0], signed=False)
     return f'@@!{scr}[{flags}]{{{cycle}}}{param_str}'
+
+
+@regop
+def o90_priorityChainScript(op, stack, game):
+    params = get_params(stack)
+    param_str = ', '.join(str(param) for param in params)
+    if param_str:
+        param_str = f' ( {param_str} )'
+    cycle = stack.pop()
+    scr = stack.pop()
+    flags = Value(op.args[0], signed=False)
+    return f'priority-chain-script {scr}[{flags}]{{{cycle}}}{param_str}'
 
 
 @regop

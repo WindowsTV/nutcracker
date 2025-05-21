@@ -589,8 +589,8 @@ OPCODES_he90: OpTable = realize(
         0x28: makeop('o90_setSpriteGroupInfo', extended_b_op),
         0x29: makeop('o90_getWizData', extended_b_op),
         0x2A: makeop('o90_getActorData'),
-        0x2B: makeop('o90_startScriptUnk', extended_b_op),
-        0x2C: makeop('o90_jumpToScriptUnk', extended_b_op),
+        0x2B: makeop('o90_priorityStartScript', extended_b_op),
+        0x2C: makeop('o90_priorityChainScript', extended_b_op),
         0x2D: makeop('o90_videoOps', extended_b_op),
         0x2E: makeop('o90_getVideoData', extended_b_op),
         0x2F: makeop('o90_floodFill', extended_b_op),
@@ -610,9 +610,9 @@ OPCODES_he90: OpTable = realize(
         0x94: makeop('o90_getPaletteData', extended_b_op),
         0x9E: makeop('o90_paletteOps', extended_b_op),
         0xA5: makeop('o90_fontEnum', extended_b_op),
-        # TODO: 0xab: makeop('o90_getActorAnimProgress'),
-        # TODO: 0xc8: makeop('o90_kernelGetFunctions'),
-        # TODO: 0xc9: makeop('o90_kernelSetFunctions'),,
+        0xAB: makeop('o90_getActorAnimProgress'),
+        0xC8: makeop('o90_kernelGetFunctions'),
+        0xC9: makeop('o90_kernelSetFunctions'),
     }
 )
 
