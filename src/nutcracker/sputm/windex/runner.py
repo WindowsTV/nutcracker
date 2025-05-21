@@ -12,6 +12,7 @@ from ..script.bytecode import script_map
 from ..strings import RAW_ENCODING
 from ..tree import narrow_schema, open_game_resource
 from .scu import dump_script_file
+from .compiler import compile_scu
 
 app = typer.Typer()
 
@@ -97,16 +98,27 @@ def decompile(
 
     for disk in root:
         for room in sputm.findall('LFLF', disk):
-            room_no = rnam.get(room.attribs['gid'], f"room_{room.attribs['gid']}")
+            room_no = rnam.get(room.attribs['gid'], f'room_{room.attribs["gid"]}')
             print(
                 '==========================',
                 room.attribs['path'],
                 room_no,
             )
-            fname = f"{script_dir}/{room.attribs['gid']:04d}_{room_no}.scu"
+            fname = f'{script_dir}/{room.attribs["gid"]:04d}_{room_no}.scu'
 
             with open(fname, 'w', **RAW_ENCODING) as script_file:
                 dump_script_file(room_no, room, decompile, script_file)
+
+
+@app.command('compile')
+def compile(
+    script: Path = typer.Argument(..., help='Windex .scu script to compile'),
+    output: Path = typer.Option(None, '--out', '-o', help='Target binary file'),
+) -> None:
+    """Compile a Windex .scu script to raw bytecode."""
+    data = compile_scu(script)
+    out = output or script.with_suffix('.bin')
+    out.write_bytes(data)
 
 
 if __name__ == '__main__':
